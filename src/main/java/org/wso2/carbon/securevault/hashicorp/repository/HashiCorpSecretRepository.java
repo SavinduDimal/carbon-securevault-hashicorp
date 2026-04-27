@@ -187,14 +187,16 @@ public class HashiCorpSecretRepository implements SecretRepository {
     public String getSecretFromVault(String address, String accessToken, Integer engineVersion, String namespace,
                                      String path) throws HashiCorpVaultException {
         try {
-            VaultConfig config = new VaultConfig().address(address).token(accessToken).engineVersion(engineVersion)
-                    .build();
-
+            VaultConfig vaultConfig = new VaultConfig().address(address).token(accessToken)
+                    .engineVersion(engineVersion);
+            String configuredNamespace = getConfiguredNamespace(namespace);
+            // Configure namespace only when it is explicitly provided.
+            if (configuredNamespace != null) {
+                vaultConfig.nameSpace(configuredNamespace);
+            }
+            VaultConfig config = vaultConfig.build();
             Vault vault = new Vault(config);
             Logical logical = vault.logical();
-            if (StringUtils.isNotEmpty(namespace)) {
-                logical = logical.withNameSpace(namespace);
-            }
             return logical.read(path).getData().get(VALUE_PARAMETER);
 
         } catch (VaultException e) {
@@ -332,7 +334,13 @@ public class HashiCorpSecretRepository implements SecretRepository {
      */
     private String retrieveServiceToken(String roleId, String secretId) throws HashiCorpVaultException {
         try {
-            final VaultConfig config = new VaultConfig().address(address).engineVersion(engineVersion).build();
+            VaultConfig vaultConfig = new VaultConfig().address(address).engineVersion(engineVersion);
+            String configuredNamespace = getConfiguredNamespace(namespace);
+            // Configure namespace only when it is explicitly provided.
+            if (configuredNamespace != null) {
+                vaultConfig.nameSpace(configuredNamespace);
+            }
+            final VaultConfig config = vaultConfig.build();
 
             Vault vault = new Vault(config);
             AuthResponse response = vault.auth().loginByAppRole(roleId, secretId);
@@ -346,6 +354,20 @@ public class HashiCorpSecretRepository implements SecretRepository {
         } catch (VaultException e) {
             throw new HashiCorpVaultException("Error retrieving service token using AppRole", e);
         }
+    }
+
+    /**
+     * Returns a trimmed Vault namespace when one is configured.
+     *
+     * @param namespace     The Vault namespace to be trimmed and returned.
+     * @return              A trimmed Vault namespace when one is configured, else null.
+     */
+    private String getConfiguredNamespace(String namespace) {
+
+        if (StringUtils.isEmpty(namespace) || StringUtils.isEmpty(namespace.trim())) {
+            return null;
+        }
+        return namespace.trim();
     }
 
     /**
