@@ -22,6 +22,7 @@ import com.bettercloud.vault.VaultConfig;
 import com.bettercloud.vault.VaultException;
 import com.bettercloud.vault.api.Logical;
 import com.bettercloud.vault.response.AuthResponse;
+import com.bettercloud.vault.response.LogicalResponse;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -40,6 +41,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
 import static org.wso2.carbon.securevault.hashicorp.common.HashiCorpVaultConstants.ADDRESS_PARAMETER;
@@ -60,6 +62,7 @@ public class HashiCorpSecretRepository implements SecretRepository {
 
     private static final Log LOG = LogFactory.getLog(HashiCorpSecretRepository.class);
     private static final String SLASH = "/";
+    private static final int HTTP_OK = 200;
 
     private SecretRepository parentRepository;
     private IdentityKeyStoreWrapper identityKeyStoreWrapper;
@@ -197,7 +200,9 @@ public class HashiCorpSecretRepository implements SecretRepository {
             VaultConfig config = vaultConfig.build();
             Vault vault = new Vault(config);
             Logical logical = vault.logical();
-            return logical.read(path).getData().get(VALUE_PARAMETER);
+            LogicalResponse logicalResponse = logical.read(path);
+            logVaultReadFailure(logicalResponse);
+            return logicalResponse.getData().get(VALUE_PARAMETER);
 
         } catch (VaultException e) {
             throw new HashiCorpVaultException("Error retrieving service token using AppRole", e);
@@ -373,6 +378,39 @@ public class HashiCorpSecretRepository implements SecretRepository {
             return null;
         }
         return trimmedNamespace;
+    }
+
+    /**
+     * Logs Vault read failures.
+     *
+     * @param logicalResponse Response returned by the Vault logical read operation.
+     */
+    private void logVaultReadFailure(LogicalResponse logicalResponse) {
+
+        int responseStatus = logicalResponse.getRestResponse().getStatus();
+        if (responseStatus == HTTP_OK) {
+            return;
+        }
+        LOG.warn("Error occurred while reading a secret from HashiCorp Vault. Vault responded with HTTP status code: "
+                + responseStatus);
+        if (LOG.isDebugEnabled()) {
+            String responseBody = getVaultResponseBody(logicalResponse.getRestResponse().getBody());
+            LOG.debug("HashiCorp Vault secret read response body: " + responseBody);
+        }
+    }
+
+    /**
+     * Returns the Vault response body as a readable string.
+     *
+     * @param responseBody Response body returned by Vault.
+     * @return Response body decoded as UTF-8, or an empty string when the response body is unavailable.
+     */
+    private String getVaultResponseBody(byte[] responseBody) {
+
+        if (responseBody == null || responseBody.length == 0) {
+            return "";
+        }
+        return new String(responseBody, StandardCharsets.UTF_8).trim();
     }
 
     /**
