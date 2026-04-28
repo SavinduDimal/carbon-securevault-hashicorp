@@ -364,10 +364,15 @@ public class HashiCorpSecretRepository implements SecretRepository {
      */
     private String getConfiguredNamespace(String namespace) {
 
-        if (StringUtils.isEmpty(namespace) || StringUtils.isEmpty(namespace.trim())) {
+        if (StringUtils.isEmpty(namespace)) {
             return null;
         }
-        return namespace.trim();
+
+        String trimmedNamespace = namespace.trim();
+        if (StringUtils.isEmpty(trimmedNamespace)) {
+            return null;
+        }
+        return trimmedNamespace;
     }
 
     /**
